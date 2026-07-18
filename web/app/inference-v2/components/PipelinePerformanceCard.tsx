@@ -7,6 +7,7 @@ import {
   wallClockDurationMs,
 } from '../lib/formatPerformance';
 import { formatPercent, isVisibleSection } from '../lib/sectionPerformance';
+import { GT_ENABLED } from '../lib/gtGate';
 
 interface Props {
   stats?: PipelinePerformanceStats | null;
@@ -61,7 +62,7 @@ export default function PipelinePerformanceCard({ stats, createdAt, completedAt 
                         <td className="px-3 py-2 text-[var(--text-primary)]">{row.label}</td>
                         <td className="px-3 py-2 text-right font-mono">
                           {formatPercent(row.scorePercent)}
-                          {row.scoreSource === 'accuracy' && (
+                          {GT_ENABLED && row.scoreSource === 'accuracy' && (
                             <span className="ml-1 text-[var(--text-muted)]">GT</span>
                           )}
                         </td>

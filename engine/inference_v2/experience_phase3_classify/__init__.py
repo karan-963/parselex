@@ -145,6 +145,59 @@ COMP_KEYWORDS = {
 }
 
 
+_DASH_CHARS = frozenset({"-", "–", "—", "|"})
+# Real list-item bullets only — a bare dash/em-dash is glue (title separator,
+# date-range dash), not a hard "new item" signal.
+_BULLET_CHARS = frozenset({"•", "◦", "▪", "■", "●", "❖", "·", "*"})
+
+
+def _block_first_token_text(block: list[dict]) -> str:
+    for t in block:
+        text = (t.get("token") or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _is_bullet_start_block(block: list[dict]) -> bool:
+    return _block_first_token_text(block) in _BULLET_CHARS
+
+
+def _fill_missing_comp_after_role_dash(
+    blocks: list[list[dict]], predictions: list[int]
+) -> list[int]:
+    """Gap-fill only: a job's ROLE block ending in a dash ("Title —") is almost
+    always followed by the company name, not a description. If the model
+    already found a COMP somewhere in this entry, or the pattern doesn't match
+    exactly, leave everything as the model predicted — never override an
+    existing, differently-classified block.
+    """
+    result = list(predictions)
+    if any(LABEL_LIST[p] == "COMP" for p in result):
+        return result
+    if len(blocks) < 2 or LABEL_LIST[result[0]] != "ROLE":
+        return result
+
+    role_last_text = ""
+    for t in reversed(blocks[0]):
+        text = (t.get("token") or "").strip()
+        if text:
+            role_last_text = text
+            break
+    if role_last_text not in _DASH_CHARS:
+        return result
+
+    if LABEL_LIST[result[1]] != "DESC":
+        return result
+    candidate_text = clean_block_text(blocks[1]).strip()
+    words = [w for w in candidate_text.split() if any(c.isalpha() for c in w)]
+    if not words or len(words) > 6:
+        return result
+
+    result[1] = LABEL_LIST.index("COMP")
+    return result
+
+
 def _apply_overrides(blocks: list[list[dict]], predictions: list[int]) -> list[int]:
     """Apply keyword / length heuristics to fix obvious classification errors."""
     in_tech_stack_context = False
@@ -256,8 +309,10 @@ def run_experience_phase3_classify(
             for tok in block:
                 tok["confidence"] = conf
         predictions = _apply_overrides(blocks, predictions)
+        predictions = _fill_missing_comp_after_role_dash(blocks, predictions)
 
         entry_key = f"JOB p{head[0]} L{head[1]}"
+        prev_label_str: str | None = None
         for block, pred_id, conf in zip(blocks, predictions, confidences):
             label_str = LABEL_LIST[pred_id]
             text = clean_block_text(block)
@@ -270,9 +325,17 @@ def run_experience_phase3_classify(
                     "block": block,
                 })
 
+            # Merge-continuation: a block sharing the previous block's label
+            # with no genuine new bullet marker is the same field split into
+            # an extra fragment by the block segmenter, not a new value.
+            continue_prev = prev_label_str == label_str and not _is_bullet_start_block(block)
             for j, t in enumerate(block):
-                bio = f"B-{label_str}" if j == 0 else f"I-{label_str}"
+                if j == 0:
+                    bio = f"I-{label_str}" if continue_prev else f"B-{label_str}"
+                else:
+                    bio = f"I-{label_str}"
                 final_labels[id(t)] = bio
+            prev_label_str = label_str
 
     block_report = build_block_classification_report(
         resume_id, report_block_rows, filtered_tokens, slug

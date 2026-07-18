@@ -1,12 +1,16 @@
 # Parselex
 
-Resume parsing inference pipeline — PDF in, structured JSON out. Extracts personal info, education, experience, projects, and skills from a resume PDF using a chain of fine-tuned PyTorch models (section detection → entry segmentation → boundary detection → field classification), no LLM calls involved.
+**Turn a resume PDF into clean, structured JSON — no LLM, no API key, no per-resume cost.**
+
+Most "AI resume parsers" are a thin wrapper around a GPT prompt: slow, non-deterministic, and billed per call. Parselex is the opposite bet — a chain of small, purpose-built PyTorch classifiers (a few MB each, MiniLM-backbone) that runs entirely on your own CPU, deterministically, offline, for free. Point it at a PDF and get back a fully structured resume: personal info, a summary, work history grouped by job, projects, and a skills list — each field individually labeled with a confidence score, not a best-effort blob of text.
+
+**How it works:** the PDF is decomposed token-by-token (position, font, style) and pushed through a 13-stage pipeline — section detection → entry boundary detection → field classification, run separately per section (education / experience / projects / skills / personal). Each stage is its own small model plus a layer of deterministic post-processing heuristics that catch the kind of boundary/continuity mistakes classifiers make (a bullet point wrongly split across a comma, a company name misfiled as a description, that sort of thing). The result is intentionally boring and predictable — same input, same output, every time.
 
 Two ways to use it:
-- **UI** — Next.js app to upload a resume, watch each pipeline stage run, inspect/compare artifacts, toggle fp32/int8 precision.
-- **API only** — one HTTP call to a FastAPI backend, get structured JSON back. No UI required.
+- **API only** — one HTTP call to a FastAPI backend, get structured JSON back. No UI required, no external dependencies beyond the model weights.
+- **UI** — a Next.js app to upload a resume and watch each of the 13 pipeline stages run in real time, inspect the raw output of every stage, and toggle between fp32/int8 model precision.
 
-Both talk to the same engine — the UI is just a client of the API.
+Both talk to the same engine — the UI is just a client of the API. Everything here is inference-only: no training code, no training data, nothing that requires a database. Clone it, download the weights, run it.
 
 ## Structure
 
@@ -14,10 +18,10 @@ Both talk to the same engine — the UI is just a client of the API.
 parselex/
   engine/            FastAPI + PyTorch inference pipeline (the actual work happens here)
   engine/parity/     parity helper modules a few classifiers dynamically import (spatial features, label rules) — inference-only, no training scripts
-  web/                Next.js UI — optional, purely a client of engine/
-  model_weights/      .pt checkpoints, not committed to git — see model_weights/README.md
-  full-database/      Karan.pdf, the bundled demo resume
-  examples/           minimal client scripts (Python + Node) calling the API directly
+  web/               Next.js UI — optional, purely a client of engine/
+  model_weights/     .pt checkpoints, not committed to git — see model_weights/README.md
+  full-database/     Karan.pdf, the bundled demo resume
+  examples/          minimal client scripts (Python + Node) calling the API directly
 ```
 
 ## Setup
@@ -49,6 +53,8 @@ Open `http://localhost:3000` — redirects to `/inference-v2`. Upload a resume P
 
 The UI is useful for debugging/inspecting individual pipeline stages (headings, boundaries, per-field classification, artifact diffing) — if you just want structured JSON out, the API alone is enough.
 
+There's also a `NEXT_PUBLIC_ENABLE_GT` flag (off by default) that toggles a ground-truth/MongoDB comparison mode used during model development — irrelevant unless you're working on the classifiers themselves and have a MongoDB-backed labeling app running separately. Leave it off.
+
 ## API
 
 ### One-shot parse (recommended)
@@ -70,6 +76,7 @@ Response:
   "structured": {
     "SECTION_HEADINGS": ["EXPERIENCE", "EDUCATION", "..."],
     "PERSONAL": [{ "label": "NAME", "value": "..." }, { "label": "EMAIL", "value": "..." }],
+    "SUMMARY": "One-paragraph professional summary, heuristically extracted — no model involved.",
     "EDUCATION": [{ "label": "DEG", "value": "..." }, { "label": "INST", "value": "..." }],
     "EDUCATION_ENTRIES": [[ /* fields grouped per education entry */ ]],
     "EXPERIENCE": [{ "label": "ROLE", "value": "..." }, { "label": "COMP", "value": "..." }],
@@ -115,7 +122,7 @@ curl -X POST "http://localhost:3000/api/inference-v2/parse" -F "file=@resume.pdf
 `examples/` has minimal, dependency-free clients (stdlib / `fetch` only) that call `/inference-v2/parse`:
 
 ```bash
-python3 examples/parse_resume.py                          # parses bundled demo resume, saves examples/Karan.json
+python3 examples/parse_resume.py                          # parses bundled demo resume, saves examples/output/Karan.json
 python3 examples/parse_resume.py resume.pdf --out result.json
 node examples/parse_resume.mjs resume.pdf --url http://localhost:8000 --precision int8
 ```

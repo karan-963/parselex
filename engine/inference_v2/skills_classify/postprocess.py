@@ -100,7 +100,13 @@ def _cross_line_list_continuation(tokens: list[dict], labels: list[str]) -> list
 
         gap_ok = True
         for mid in range(prev_idx + 1, index):
-            if not _is_punctuation_only(_token_text(tokens[mid])) and _token_text(tokens[mid]):
+            mid_text = _token_text(tokens[mid])
+            if "," in mid_text:
+                # A comma explicitly closed the previous item — this is a
+                # new list entry, not a continuation across the line break.
+                gap_ok = False
+                break
+            if not _is_punctuation_only(mid_text) and mid_text:
                 gap_ok = False
                 break
         if gap_ok:
@@ -161,6 +167,77 @@ def _promote_comma_list_gaps(tokens: list[dict], labels: list[str]) -> list[str]
     return result
 
 
+def _merge_adjacent_skill_fragments(tokens: list[dict], labels: list[str]) -> list[str]:
+    """Merge back-to-back B-SKILL tokens into one phrase when nothing but
+    punctuation (parens, spaces) separates them on the same line — the model
+    sometimes re-opens a new B-SKILL for each word of a multi-word term (e.g.
+    "Segment" / "Anything" / "Model" / "2" instead of one "Segment Anything
+    Model 2" entry). A literal comma between them is a real, intentional list
+    separator and is left alone.
+    """
+    result = list(labels)
+    for index, token in enumerate(tokens):
+        if token.get("section") != "SKILLS" or result[index] != "B-SKILL":
+            continue
+        if not _is_alphanumeric(_token_text(token)):
+            continue
+
+        prev_idx = _prev_alnum_index(tokens, result, index)
+        if prev_idx is None or _line_key(tokens[prev_idx]) != _line_key(token):
+            continue
+        # Only merge into a preceding skill *value*, never into a SKILL_TYPE
+        # header (e.g. "Models & Frameworks :") — that would wrongly fold the
+        # first skill after the header into the header's own label chain.
+        if result[prev_idx] not in ("B-SKILL", "I-SKILL"):
+            continue
+
+        has_comma = False
+        for mid in range(prev_idx + 1, index):
+            if "," in _token_text(tokens[mid]):
+                has_comma = True
+                break
+        if has_comma:
+            continue
+
+        result[index] = "I-SKILL"
+    return result
+
+
+def _demote_after_comma_to_new_item(tokens: list[dict], labels: list[str]) -> list[str]:
+    """A raw I-SKILL immediately after a "," is a model mistake, not a real
+    continuation — a comma always closes the previous item (even across a
+    line break, e.g. "CNN Architectures," / next line "PyTorch"). Retag the
+    token that follows as the head (B-SKILL) of a new entry.
+    """
+    result = list(labels)
+    for index, token in enumerate(tokens):
+        if token.get("section") != "SKILLS" or result[index] != "I-SKILL":
+            continue
+        if index == 0:
+            continue
+        prior_text = _token_text(tokens[index - 1])
+        if "," in prior_text:
+            result[index] = "B-SKILL"
+    return result
+
+
+def _strip_punctuation_only_labels(tokens: list[dict], labels: list[str]) -> list[str]:
+    """A stray "," is always the list separator, never a skill on its own.
+
+    Narrower than a general punctuation check on purpose — connective glue
+    like "&"/"("/")"/":" legitimately carries I-SKILL / I-SKILL_TYPE inside
+    multi-word terms (e.g. "Models & Frameworks", "SAM2 ( Segment ... )") and
+    must not be stripped.
+    """
+    result = list(labels)
+    for index, token in enumerate(tokens):
+        if token.get("section") != "SKILLS" or not _is_skill_label(result[index]):
+            continue
+        if _token_text(token) == ",":
+            result[index] = "O"
+    return result
+
+
 def postprocess_skill_predictions(tokens: list[dict], predictions: list[str]) -> list[str]:
     """Apply promote-only heuristics on top of model argmax labels."""
     if len(predictions) != len(tokens):
@@ -170,4 +247,7 @@ def postprocess_skill_predictions(tokens: list[dict], predictions: list[str]) ->
     labels = _promote_comma_list_gaps(tokens, labels)
     labels = _line_leading_punctuation_continuation(tokens, labels)
     labels = _cross_line_list_continuation(tokens, labels)
+    labels = _merge_adjacent_skill_fragments(tokens, labels)
+    labels = _demote_after_comma_to_new_item(tokens, labels)
+    labels = _strip_punctuation_only_labels(tokens, labels)
     return labels

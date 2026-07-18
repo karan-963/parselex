@@ -808,7 +808,7 @@ export default function ArtifactJsonLoader({ slug, resumeId, filename }: Props) 
           </div>
 
           <div className="flex items-center gap-2 text-xs flex-wrap justify-end">
-            {resumeId && (
+            {isGtEnabled(resumeId) && (
               <button
                 type="button"
                 onClick={() => setGtRefreshTick((n) => n + 1)}

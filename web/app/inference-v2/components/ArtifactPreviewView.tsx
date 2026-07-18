@@ -104,7 +104,7 @@ export default function ArtifactPreviewView({ filename, data }: Props) {
   return (
     <div className="space-y-4 my-2">
       <p className="text-[10px] text-[var(--text-secondary)]">
-        Inference preview (no MongoDB ground truth). Arrays are shown as tables; other fields below.
+        Inference preview. Arrays are shown as tables; other fields below.
       </p>
 
       {tables.map((table) => (

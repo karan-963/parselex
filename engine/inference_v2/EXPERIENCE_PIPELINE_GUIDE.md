@@ -1,5 +1,7 @@
 # Experience Pipeline — Architecture, Isolation & Known Failure Points
 
+> **Note:** written during initial development against the full training monorepo — `training-engine/` paths mean this `engine/` folder, and `training_pipeline/` paths referenced below no longer exist in this trimmed, public, inference-only repo (the few parity helpers that were needed now live in `engine/parity/`). Kept for architecture/design rationale.
+
 **Read this before changing steps 8–10.** Training phases are **1 → 2 → 3** (segment → divide → classify). Inference **executes** phase 2 before phase 1 (step 8 before step 9) because segmentation runs per entry slice.
 
 **Companion:** [`README.md`](./README.md) (artifacts, GT sources, rerun commands).

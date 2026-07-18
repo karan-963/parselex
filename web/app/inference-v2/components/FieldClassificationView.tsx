@@ -8,7 +8,7 @@ import {
   FieldClassificationRow,
 } from '../lib/fieldClassificationReport';
 import { cleanPersonalSegmentText } from '../lib/personalDisplayUtils';
-import { isGtEnabled } from '../lib/gtGate';
+import { isGtEnabled, GT_ENABLED } from '../lib/gtGate';
 
 interface Props {
   slug: string;
@@ -97,7 +97,7 @@ export default function FieldClassificationView({ slug, resumeId, artifact }: Pr
   }, [resumeId, gtRefreshTick]);
 
   const report = useMemo(() => {
-    if (artifact.blockClassification?.blockRows?.length) {
+    if (GT_ENABLED && artifact.blockClassification?.blockRows?.length) {
       return artifact.blockClassification;
     }
     if (!dbResumeData) return null;
@@ -130,9 +130,11 @@ export default function FieldClassificationView({ slug, resumeId, artifact }: Pr
         : isPersonal
           ? 'NAME / PHONE / EMAIL / LOCATION / …'
           : 'ROLE / COMP / DATE / DESC';
-    const gtUnavailableNote = isGtEnabled(resumeId)
-      ? <>No MongoDB labels found for this resume yet — showing model predictions only. Save labels in the viewer, then Refresh GT.</>
-      : <>Ground-truth comparison is only available for the default reference resume; this is an uploaded resume, so only model predictions are shown.</>;
+    const gtUnavailableNote = !GT_ENABLED
+      ? null
+      : isGtEnabled(resumeId)
+        ? <> No MongoDB labels found for this resume yet — showing model predictions only. Save labels in the viewer, then Refresh GT.</>
+        : <> Ground-truth comparison is only available for the default reference resume; this is an uploaded resume, so only model predictions are shown.</>;
     return (
       <div className="space-y-3 my-2">
         <div className="text-[10px] text-[var(--text-secondary)] space-y-1 max-w-2xl">
@@ -140,7 +142,7 @@ export default function FieldClassificationView({ slug, resumeId, artifact }: Pr
             <span className="font-semibold text-[var(--text-primary)]">
               Step {stepNum} — Predicted field classification
             </span>
-            . Each row is a predicted {unit} classified as {classList}. {gtUnavailableNote}
+            . Each row is a predicted {unit} classified as {classList}.{gtUnavailableNote}
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2 p-3 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] text-xs max-w-xs">

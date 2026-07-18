@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { buildEntryDividerReport, buildPredictedEntryReport, EntryDividerLineRow } from '../lib/entryDividerLines';
-import { isGtEnabled } from '../lib/gtGate';
+import { isGtEnabled, GT_ENABLED } from '../lib/gtGate';
 
 interface Props {
   slug: string;
@@ -18,7 +18,8 @@ interface Props {
   };
 }
 
-function LineTable({ rows }: { rows: EntryDividerLineRow[] }) {
+function LineTable({ rows, showGt = GT_ENABLED }: { rows: EntryDividerLineRow[]; showGt?: boolean }) {
+  const colCount = showGt ? 7 : 6;
   return (
     <div className="overflow-x-auto border border-[var(--border)] rounded-lg">
       <table className="w-full text-left border-collapse text-xs">
@@ -26,7 +27,7 @@ function LineTable({ rows }: { rows: EntryDividerLineRow[] }) {
           <tr>
             <th className="p-2.5 font-semibold">Status</th>
             <th className="p-2.5 font-semibold">P/L</th>
-            <th className="p-2.5 font-semibold">GT</th>
+            {showGt && <th className="p-2.5 font-semibold">GT</th>}
             <th className="p-2.5 font-semibold">Pred</th>
             <th className="p-2.5 font-semibold">Conf</th>
             <th className="p-2.5 font-semibold">Token labels</th>
@@ -36,14 +37,14 @@ function LineTable({ rows }: { rows: EntryDividerLineRow[] }) {
         <tbody className="font-mono text-[11px]">
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={7} className="p-3 text-[var(--text-secondary)]">No entry divider lines.</td>
+              <td colSpan={colCount} className="p-3 text-[var(--text-secondary)]">No entry divider lines.</td>
             </tr>
           ) : (
             rows.map((row) => (
               <tr key={`${row.page}-${row.line}`} className="border-b border-[var(--border)]/50 hover:bg-[var(--bg-elevated)]/50">
                 <td className="p-2.5">{row.status}</td>
                 <td className="p-2.5 whitespace-nowrap">P{row.page} L{row.line}</td>
-                <td className="p-2.5">{row.gt || '—'}</td>
+                {showGt && <td className="p-2.5">{row.gt || '—'}</td>}
                 <td className="p-2.5">{row.pred || '—'}</td>
                 <td className={`p-2.5 whitespace-nowrap ${row.confidence != null && row.confidence < 0.5 ? 'text-amber-500' : ''}`}>
                   {row.confidence != null ? `${(row.confidence * 100).toFixed(1)}%` : '—'}
@@ -168,10 +169,12 @@ export default function EntrySectionDividerView({ slug, resumeId, filename, arti
               Step {stepNum} — Predicted entry boundaries
             </span>
             . Each row is a predicted <strong>{entryNoun} entry start line</strong>{' '}
-            (<code>{startLabel}</code>).{' '}
-            {isGtEnabled(resumeId)
-              ? <>No MongoDB <code>{headsKey}</code> found for this resume yet — showing model predictions only. Save entry heads in the viewer, then Refresh GT.</>
-              : <>Ground-truth comparison is only available for the default reference resume; this is an uploaded resume, so only model predictions are shown.</>}
+            (<code>{startLabel}</code>).
+            {GT_ENABLED && (
+              isGtEnabled(resumeId)
+                ? <> No MongoDB <code>{headsKey}</code> found for this resume yet — showing model predictions only. Save entry heads in the viewer, then Refresh GT.</>
+                : <> Ground-truth comparison is only available for the default reference resume; this is an uploaded resume, so only model predictions are shown.</>
+            )}
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2 p-3 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] text-xs max-w-xs">

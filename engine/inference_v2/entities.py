@@ -46,6 +46,10 @@ def extract_entities(tokens: list[dict]) -> list[tuple[str, str]]:
             val = re.sub(r"\s+", "", val)
         else:
             val = re.sub(r"\s+([,.:;!?])", r"\1", val)
+            # Same token-split URL scheme issue can land inside a DESC/value
+            # field too (e.g. a project link written inline in a bullet) —
+            # collapse "https : //x" / "https: //x" back to "https://x".
+            val = re.sub(r"\b(https?):\s*//\s*", r"\1://", val)
         cleaned.append((label, val))
     return cleaned
 

@@ -1,6 +1,8 @@
 # Inference V2 — Pipeline, Artifacts & Ground Truth
 
-This folder runs the **end-to-end PDF inference pipeline** and writes numbered JSON artifacts under `training-engine/inference_runs/<slug>/`. The Next.js **inference-v2 visualizer** (`/app/inference-v2`) loads those artifacts and compares predictions to **live MongoDB labels**.
+> **Note:** this doc was written during initial development against the full training monorepo. Some paths it references (`training-engine/`, `training_pipeline/`) predate this trimmed, public, inference-only repo and no longer exist here — `training-engine/` is just this `engine/` folder, and the handful of parity helpers that used to live under `training_pipeline/` now live in `engine/parity/`. Kept for the pipeline design rationale; ground-truth/MongoDB comparison described below is dev-only and off by default (see root `README.md`).
+
+This folder runs the **end-to-end PDF inference pipeline** and writes numbered JSON artifacts under `engine/inference_runs/<slug>/`. The Next.js **inference-v2 visualizer** (`/app/inference-v2`) loads those artifacts and, in dev mode, compares predictions to **MongoDB labels** (not available/needed for normal use).
 
 Read this before debugging “GT looks wrong” or “my viewer edits don’t show up”.
 

@@ -1,6 +1,8 @@
 # Project Pipeline — Architecture, Naming & Step 12
 
-Companion to [`README.md`](./README.md). Training reference: [`training_pipeline/project/PROJECT_PIPELINE.md`](../training_pipeline/project/PROJECT_PIPELINE.md).
+> **Note:** written during initial development against the full training monorepo — `training-engine/` paths mean this `engine/` folder, and `training_pipeline/` paths referenced below no longer exist in this trimmed, public, inference-only repo (the few parity helpers that were needed now live in `engine/parity/`). Kept for architecture/design rationale.
+
+Companion to [`README.md`](./README.md).
 
 ---
 
