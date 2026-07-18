@@ -1,0 +1,32 @@
+# secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# model weights (Drive-hosted, see model_weights/README.md)
+model_weights/**/*.pt
+
+# build output (hosted on R2, see model_weights/README.md)
+dist/
+
+# python
+__pycache__/
+**/__pycache__/
+engine/.venv/
+engine/inference_runs/
+*.pyc
+
+# node / next.js
+web/node_modules/
+web/.next/
+web/.env.local
+web/*.tsbuildinfo
+web/next-env.d.ts
+
+# example script output
+examples/output/
+
+# misc
+.DS_Store
+**/.DS_Store

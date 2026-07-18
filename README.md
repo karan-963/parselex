@@ -1,0 +1,131 @@
+# Parselex
+
+Resume parsing inference pipeline — PDF in, structured JSON out. Extracts personal info, education, experience, projects, and skills from a resume PDF using a chain of fine-tuned PyTorch models (section detection → entry segmentation → boundary detection → field classification), no LLM calls involved.
+
+Two ways to use it:
+- **UI** — Next.js app to upload a resume, watch each pipeline stage run, inspect/compare artifacts, toggle fp32/int8 precision.
+- **API only** — one HTTP call to a FastAPI backend, get structured JSON back. No UI required.
+
+Both talk to the same engine — the UI is just a client of the API.
+
+## Structure
+
+```
+parselex/
+  engine/            FastAPI + PyTorch inference pipeline (the actual work happens here)
+  engine/parity/     parity helper modules a few classifiers dynamically import (spatial features, label rules) — inference-only, no training scripts
+  web/                Next.js UI — optional, purely a client of engine/
+  model_weights/      .pt checkpoints, not committed to git — see model_weights/README.md
+  full-database/      Karan.pdf, the bundled demo resume
+  examples/           minimal client scripts (Python + Node) calling the API directly
+```
+
+## Setup
+
+### 1. Download model weights
+Required either way (UI or API-only) — the engine won't start correctly without them. Follow `model_weights/README.md`: download from Google Drive, drop files into `model_weights/<stage>/`. ~2.5GB total (fp32 + int8 checkpoints for 13 stages).
+
+### 2. Run the engine
+```bash
+cd engine
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+Verify it's up:
+```bash
+curl localhost:8000/health   # {"status":"ok"}
+```
+This is all you need for API-only usage — skip to [API](#api) below.
+
+### 3. (Optional) Run the web UI
+```bash
+cd web
+npm install
+cp .env.local.example .env.local
+npm run dev
+```
+Open `http://localhost:3000` — redirects to `/inference-v2`. Upload a resume PDF, or click "run default" to try the bundled demo resume. `FASTAPI_URL` in `.env.local` points the UI at the engine (defaults to `localhost:8000`).
+
+The UI is useful for debugging/inspecting individual pipeline stages (headings, boundaries, per-field classification, artifact diffing) — if you just want structured JSON out, the API alone is enough.
+
+## API
+
+### One-shot parse (recommended)
+
+Upload a PDF, block until the whole pipeline finishes, get the final structured entities back in one response.
+
+```bash
+curl -X POST "http://localhost:8000/inference-v2/parse" \
+  -F "file=@resume.pdf"
+```
+
+Optional `?precision=fp32|int8` query param (default `fp32`; `int8` is faster/smaller, slightly lower accuracy).
+
+Response:
+```json
+{
+  "slug": "resume_ab12cd",
+  "resumeId": "resume",
+  "structured": {
+    "SECTION_HEADINGS": ["EXPERIENCE", "EDUCATION", "..."],
+    "PERSONAL": [{ "label": "NAME", "value": "..." }, { "label": "EMAIL", "value": "..." }],
+    "EDUCATION": [{ "label": "DEG", "value": "..." }, { "label": "INST", "value": "..." }],
+    "EDUCATION_ENTRIES": [[ /* fields grouped per education entry */ ]],
+    "EXPERIENCE": [{ "label": "ROLE", "value": "..." }, { "label": "COMP", "value": "..." }],
+    "EXPERIENCE_ENTRIES": [[ /* fields grouped per job entry */ ]],
+    "PROJECTS": [{ "label": "PROJ_NAME", "value": "..." }, { "label": "DESC", "value": "..." }],
+    "PROJECT_ENTRIES": [[ /* fields grouped per project entry */ ]],
+    "SKILLS": ["Python", "React", "..."]
+  }
+}
+```
+
+`*_ENTRIES` arrays group the flat field lists above them into per-entry chunks (one array per job/degree/project) — use those if you need entry boundaries; use the flat `PERSONAL`/`EDUCATION`/`EXPERIENCE`/`PROJECTS` arrays if you just want every labeled field.
+
+Takes ~5–10s per resume on CPU (first request after startup is slower — models load lazily per stage and stay cached in memory after).
+
+### Async flow (what the UI uses)
+
+If you want progress visibility per stage instead of one blocking call:
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/inference-v2/run` | Upload a PDF, starts a background run, returns `{slug, status: "running"}` immediately |
+| `POST` | `/inference-v2/run/default` | Same, but runs the bundled demo resume |
+| `GET` | `/inference-v2/runs` | List all runs |
+| `GET` | `/inference-v2/runs/{slug}` | Poll run status/manifest — `status` becomes `"completed"` or `"failed"`, `artifacts` lists per-stage JSON files as they're written |
+| `GET` | `/inference-v2/runs/{slug}/pdf` | Fetch the original uploaded PDF |
+| `GET` | `/inference-v2/runs/{slug}/artifacts/{filename}` | Fetch a specific stage's raw output, e.g. `8_experience_segments.json` |
+
+Poll `GET /inference-v2/runs/{slug}` until `status` is `completed`, then read `structured.json` via the artifacts endpoint for the same final output `/parse` returns directly.
+
+(There are also `POST /inference-v2/runs/{slug}/rerun/{stage}` and `/{stage}/predict` endpoints per pipeline stage — internal, used by the UI's per-stage debug/rerun tools. Not a stable public contract; use `/parse` or `/run` instead.)
+
+### Through the Next.js proxy
+
+If running the web UI, the same `/parse` and `/run` endpoints are also reachable via Next.js API routes at `http://localhost:3000/api/inference-v2/...` (they just forward to the FastAPI engine using `FASTAPI_URL`). Useful if you're calling from browser JS and want to avoid CORS, or want one origin for both UI and API.
+
+```bash
+curl -X POST "http://localhost:3000/api/inference-v2/parse" -F "file=@resume.pdf"
+```
+
+### Example client scripts
+
+`examples/` has minimal, dependency-free clients (stdlib / `fetch` only) that call `/inference-v2/parse`:
+
+```bash
+python3 examples/parse_resume.py                          # parses bundled demo resume, saves examples/Karan.json
+python3 examples/parse_resume.py resume.pdf --out result.json
+node examples/parse_resume.mjs resume.pdf --url http://localhost:8000 --precision int8
+```
+
+## Pipeline stages
+
+Each resume passes through, in order: token extraction (`pdfplumber`) → section heading detection → section assignment → then per-section (education / experience / project): token segmentation → boundary/divider → field classification. Skills and personal info are classified directly without a boundary stage. See `engine/inference_v2/config.py:PIPELINE_STEPS` for the exact stage list and artifact filenames.
+
+## Troubleshooting
+
+- **Engine fails to import with `ModuleNotFoundError`** — a model's checkpoint is missing. Confirm `model_weights/<stage>/` is populated (see step 1).
+- **`/parse` times out** — first request per stage loads that stage's model into memory; subsequent requests are fast. If it never returns, check `uvicorn` logs for a stage-level traceback.
+- **UI shows errors but engine is healthy** — check `web/.env.local` has the right `FASTAPI_URL`, and that the engine is actually reachable from wherever `npm run dev` is running.
