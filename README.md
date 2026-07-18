@@ -12,6 +12,17 @@ Two ways to use it:
 
 Both talk to the same engine — the UI is just a client of the API. Everything here is inference-only: no training code, no training data, nothing that requires a database. Clone it, download the weights, run it.
 
+## Status & limitations
+
+This is an early-stage project, not a polished drop-in product yet — read this before wiring it into a real workflow.
+
+- **Small training set.** The classifiers were trained on a limited number of labeled resumes. Expect solid accuracy on resumes that look broadly like the training distribution (standard Western tech-resume conventions) and more misclassifications the further a resume drifts from that — unusual layouts, heavy formatting, non-English content, etc. Don't treat the output as ground truth without a review step in your workflow.
+- **Single-column resumes only.** The pipeline's reading-order logic is not built for multi-column layouts (side-by-side sidebar + main content, etc.). Feed it a two-column resume and expect scrambled section/field assignment, not a clean error.
+- **No overall resume score.** Parselex extracts and labels fields — it does not produce any kind of quality score, ATS-match score, or ranking. If your workflow needs a "how good is this resume" number, that's out of scope here; you'd build that on top of the structured output yourself.
+- **Confidence scores help, but aren't a substitute for validation.** Every field comes with a model confidence, useful for flagging low-confidence extractions for human review — but a high-confidence field can still be wrong (see the small-training-set point above).
+
+If you hit a resume that parses badly, the most useful thing you can do is open an issue with the (anonymized/redacted, if needed) PDF — the training set is the actual bottleneck here, not the pipeline architecture.
+
 ## Structure
 
 ```
