@@ -1,38 +1,35 @@
 # Model weights
 
-Not checked into git (too large for GitHub) — hosted as a single zip on Cloudflare storage.
-
-**Download URL:** `https://pub-6d31e47e899b48e69c7e7a45f99b3565.r2.dev/parselex-model-weights.zip`
-**MD5:** `1669fbcbf3bf772648f3fa4b5efd68d2`
-**SHA256:** `2fe9f5f52b8042d6e5e5c34f32e351b1ceb3a9bdc9119db71a4788e234466907`
-**Size:** ~2.0GB zipped (~2.5GB extracted)
+Not checked into git (too large for GitHub) — hosted on Hugging Face:
+[`karan963/parselex-weights`](https://huggingface.co/karan963/parselex-weights). ~2.5GB total
+(fp32 + int8 checkpoints for 13 stages).
 
 ## Quick setup (recommended)
 
 ```bash
+pip install huggingface_hub   # if not already installed
 cd model_weights
 ./download.sh
 # or, cross-platform:
 python3 download.py
 ```
 
-Both scripts download the zip, verify it against the MD5 above, extract into `model_weights/`, and delete the zip. Edit the `URL`/`MD5_EXPECTED` constants at the top of the script once (or set `PARSELEX_WEIGHTS_URL` env var) before running.
+Both scripts pull straight from the Hugging Face repo above into `model_weights/<stage>/` — no
+zip, no manual integrity check (Hugging Face's own transfer already handles that). Set
+`PARSELEX_WEIGHTS_REPO` (shell) / `PARSELEX_WEIGHTS_REPO` env var (Python) to point at a fork or
+mirror instead.
 
 ## Manual setup
 
-1. Download the zip from the URL above.
-2. Verify integrity:
-   ```bash
-   # macOS
-   md5 -q parselex-model-weights.zip   # compare to MD5 above
-   # Linux
-   md5sum parselex-model-weights.zip   # compare to MD5 above
-   ```
-3. Extract into this folder: `unzip parselex-model-weights.zip -d .`
+```bash
+hf download karan963/parselex-weights --local-dir model_weights --include "*/*.pt"
+# or, via Python:
+python3 -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='karan963/parselex-weights', local_dir='model_weights', allow_patterns=['*/*.pt'])"
+```
 
 ## Layout
 
-Each pipeline stage gets its own subfolder here. `engine/inference_v2/<stage>/*.pt` are symlinks pointing at these files — extracting the zip here is all that's needed, no code changes.
+Each pipeline stage gets its own subfolder here. `engine/inference_v2/<stage>/*.pt` are symlinks pointing at these files — downloading into this folder is all that's needed, no code changes.
 
 | Folder | Files needed |
 |---|---|
@@ -50,4 +47,4 @@ Each pipeline stage gets its own subfolder here. `engine/inference_v2/<stage>/*.
 | `skills_classify/` | `best_model.pt`, `best_model_int8.pt` |
 | `personal_classify/` | `best_model.pt`, `best_model_int8.pt` |
 
-`best_model.pt` = fp32 checkpoint. `best_model_int8.pt` = quantized (smaller, faster). The UI's precision selector (`fp32` / `int8`) picks between them per-request — the zip ships both.
+`best_model.pt` = fp32 checkpoint. `best_model_int8.pt` = quantized (smaller, faster). The UI's precision selector (`fp32` / `int8`) picks between them per-request — the HF repo ships both.
