@@ -38,7 +38,7 @@ parselex/
 ## Setup
 
 ### 1. Download model weights
-Required either way (UI or API-only) — the engine won't start correctly without them. Follow `model_weights/README.md`: download from Google Drive, drop files into `model_weights/<stage>/`. ~2.5GB total (fp32 + int8 checkpoints for 13 stages).
+Required either way (UI or API-only) — the engine won't start correctly without them. Hosted on Hugging Face: [`karan963/parselex-weights`](https://huggingface.co/karan963/parselex-weights). Follow `model_weights/README.md` to fetch and place files into `model_weights/<stage>/`. ~2.5GB total (fp32 + int8 checkpoints for 13 stages).
 
 ### 2. Run the engine
 ```bash
@@ -147,3 +147,8 @@ Each resume passes through, in order: token extraction (`pdfplumber`) → sectio
 - **Engine fails to import with `ModuleNotFoundError`** — a model's checkpoint is missing. Confirm `model_weights/<stage>/` is populated (see step 1).
 - **`/parse` times out** — first request per stage loads that stage's model into memory; subsequent requests are fast. If it never returns, check `uvicorn` logs for a stage-level traceback.
 - **UI shows errors but engine is healthy** — check `web/.env.local` has the right `FASTAPI_URL`, and that the engine is actually reachable from wherever `npm run dev` is running.
+
+## License
+
+MIT — see [`LICENSE`](./LICENSE). Covers this repository's code only; the accompanying paper is
+licensed separately (CC BY 4.0).
